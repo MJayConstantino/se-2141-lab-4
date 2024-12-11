@@ -48,6 +48,26 @@ CREATE TRIGGER book_availability_check
 BEFORE INSERT ON Book_Loans
 FOR EACH ROW EXECUTE FUNCTION check_book_availability();
 
+-- HANDLE RETURNED BOOKS
+CREATE OR REPLACE FUNCTION update_book_quantity_on_return()
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Update the quantity_available of the books if the loan is marked as returned
+    IF NEW.status = 'returned' AND OLD.status != 'returned' THEN
+        UPDATE Books
+        SET quantity_available = quantity_available + 1
+        WHERE isbn = NEW.isbn;
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER after_loan_update
+AFTER UPDATE ON Book_Loans
+FOR EACH ROW
+EXECUTE FUNCTION update_book_quantity_on_return();
+
 -- Part 3: SQL Queries 
 -- a. Insert a new book into the library with a quantity of 5. 
 INSERT INTO Books (isbn, title, author, genre, published_year, quantity_available) 
