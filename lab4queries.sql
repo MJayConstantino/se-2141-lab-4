@@ -28,6 +28,26 @@ CREATE TABLE Book_Loans (
     FOREIGN KEY (isbn) REFERENCES Books(isbn)
 );
 
+--RULES CHECK AVAILABILITY HANDLER
+CREATE OR REPLACE FUNCTION check_book_availability() 
+RETURNS TRIGGER AS $$
+BEGIN
+    -- Check if there are available copies of the book
+    IF (SELECT quantity_available FROM Books WHERE isbn = NEW.isbn) <= 0 THEN
+        RAISE EXCEPTION 'No copies available for this book';
+    END IF;
+    -- Update the book's available quantity when a loan is made
+    UPDATE Books
+    SET quantity_available = quantity_available - 1
+    WHERE isbn = NEW.isbn;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER book_availability_check
+BEFORE INSERT ON Book_Loans
+FOR EACH ROW EXECUTE FUNCTION check_book_availability();
+
 -- Part 3: SQL Queries 
 -- a. Insert a new book into the library with a quantity of 5. 
 INSERT INTO Books (isbn, title, author, genre, published_year, quantity_available) 
@@ -51,15 +71,16 @@ JOIN Books b ON bl.isbn = b.isbn
 WHERE bl.user_id = 1;
 
 -- e. List all overdue loans. 
-SELECT u.full_name, b.title, bl.loan_date, bl.return_date 
-FROM Book_Loans bl 
-JOIN Users u ON bl.user_id = u.user_id 
-JOIN Books b ON bl.isbn = b.isbn 
-WHERE bl.status = 'overdue';
+SELECT *
+FROM Book_Loans 
+WHERE status = 'overdue';
 
 -- Part 4: Data Integrity and Optimization 
 -- Fast retrieval of overdue loans. 
-SELECT * 
+CREATE INDEX idx_overdue_loans 
+ON Book_Loans (status, loan_date);
+
+SELECT *
 FROM Book_Loans 
 WHERE status = 'overdue';
 
